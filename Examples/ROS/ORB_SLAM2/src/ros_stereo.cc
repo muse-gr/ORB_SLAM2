@@ -33,6 +33,8 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
+#include "cube_msgs/LocalizationStatus.h"
+
 #include<opencv2/core/core.hpp>
 
 #include"../../../include/System.h"
@@ -42,6 +44,7 @@ using namespace std;
 ofstream g_ofs;
 int g_seq;
 ros::Publisher g_pubPose;
+ros::Publisher g_pubInfo;
 
 class ImageGrabber
 {
@@ -121,6 +124,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
+    g_pubInfo = nh.advertise<cube_msgs::LocalizationStatus>("/cube/data/vslam_localization/pose", 1);
 
     message_filters::Subscriber<sensor_msgs::Image> left_sub(nh, "/camera/left/image_raw", 1);
     message_filters::Subscriber<sensor_msgs::Image> right_sub(nh, "/camera/right/image_raw", 1);
