@@ -33,7 +33,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
-#include "cube_msgs/LocalizationStatus.h"
+// #include "cube_msgs/LocalizationStatus.h"
 
 #include<opencv2/core/core.hpp>
 
@@ -77,10 +77,12 @@ int main(int argc, char **argv)
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,false);
 
+    std::cout<< "l1";
     ImageGrabber igb(&SLAM);
 
     stringstream ss(argv[3]);
 	ss >> boolalpha >> igb.do_rectify;
+    std::cout<< "l2";
 
     if(igb.do_rectify)
     {
@@ -124,7 +126,9 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
-    g_pubInfo = nh.advertise<cube_msgs::LocalizationStatus>("/cube/data/vslam_localization/pose", 1);
+    // g_pubInfo = nh.advertise<cube_msgs::LocalizationStatus>("/cube/data/vslam_localization/pose", 1);
+
+std::cout<< "l3";
 
     message_filters::Subscriber<sensor_msgs::Image> left_sub(nh, "/camera/left/image_raw", 1);
     message_filters::Subscriber<sensor_msgs::Image> right_sub(nh, "/camera/right/image_raw", 1);
@@ -133,7 +137,7 @@ int main(int argc, char **argv)
     sync.registerCallback(boost::bind(&ImageGrabber::GrabStereo,&igb,_1,_2));
 
     ros::spin();
-
+std::cout<< "l4";
     // Stop all threads
     SLAM.Shutdown();
 

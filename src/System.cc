@@ -50,12 +50,23 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         cout << "RGB-D" << endl;
 
     //Check settings file
-    cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
-    if(!fsSettings.isOpened())
+    cv::FileStorage fsSettings;// = cv::FileStorage(strSettingsFile.c_str(), cv::FileStorage::READ);
+    cout << "checking settings file at " << strSettingsFile.c_str() << "\n";
+    try
     {
-       cerr << "Failed to open settings file at: " << strSettingsFile << endl;
-       exit(-1);
+        fsSettings.open(strSettingsFile.c_str(), cv::FileStorage::READ);
     }
+    catch(cv::Exception e)
+    {
+        cout << "caught exception " << e.what() << "\n";
+        exit(-1);
+    }
+    cout << "l2 \n";
+    // if(!fsSettings.isOpened())
+    // {
+    //    cerr << "Failed to open settings file at: " << strSettingsFile << endl;
+    //    exit(-1);
+    // }
 
 
     //Load ORB Vocabulary
@@ -74,12 +85,16 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //Create KeyFrame Database
     mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
+    cout << "lsystem3 \n";
     //Create the Map
     mpMap = new Map();
-
+    cout << "lsystem4 \n";
     //Create Drawers. These are used by the Viewer
     mpFrameDrawer = new FrameDrawer(mpMap);
+    cout << "lsystem5 \n";
     mpMapDrawer = new MapDrawer(mpMap, strSettingsFile);
+
+cout << "lsystem6 \n";
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
@@ -90,6 +105,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLocalMapper = new LocalMapping(mpMap, mSensor==MONOCULAR);
     mptLocalMapping = new thread(&ORB_SLAM2::LocalMapping::Run,mpLocalMapper);
 
+cout << "l5 \n";
     //Initialize the Loop Closing thread and launch
     mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
     mptLoopClosing = new thread(&ORB_SLAM2::LoopClosing::Run, mpLoopCloser);
@@ -102,13 +118,14 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpTracker->SetViewer(mpViewer);
     }
 
+cout << "l6 \n";
     //Set pointers between threads
     mpTracker->SetLocalMapper(mpLocalMapper);
     mpTracker->SetLoopClosing(mpLoopCloser);
 
     mpLocalMapper->SetTracker(mpTracker);
     mpLocalMapper->SetLoopCloser(mpLoopCloser);
-
+cout << "l7 \n";
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 }
