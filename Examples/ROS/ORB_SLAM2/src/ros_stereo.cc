@@ -27,6 +27,7 @@
 #include<ros/ros.h>
 #include<std_msgs/Float64MultiArray.h>
 #include<std_msgs/MultiArrayDimension.h>
+#include<std_msgs/String.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -45,6 +46,9 @@ ofstream g_ofs;
 int g_seq;
 ros::Publisher g_pubPose;
 ros::Publisher g_pubInfo;
+
+ros::Subscriber g_resetSub;
+
 struct PoseInfo
 {
     double numberOfMatches = 0.0;
@@ -59,6 +63,8 @@ public:
     ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
     void GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const sensor_msgs::ImageConstPtr& msgRight);
+
+    void onResetCommand(const std_msgs::String::ConstPtr& data);
 
     ORB_SLAM2::System* mpSLAM;
     bool do_rectify;
@@ -132,6 +138,8 @@ int main(int argc, char **argv)
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
     g_pubInfo = nh.advertise<std_msgs::Float64MultiArray>("/cube/data/vslam_localization/info", 1);
+    g_resetSub = nh.subscribe(
+        "/cube/localization/vslam/command", 1, &ImageGrabber::onResetCommand, &igb);
 
     message_filters::Subscriber<sensor_msgs::Image> left_sub(nh, "/camera/left/image_raw", 1);
     message_filters::Subscriber<sensor_msgs::Image> right_sub(nh, "/camera/right/image_raw", 1);
@@ -302,4 +310,8 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
 //    g_ofs << trans[0] << "," << trans[1] << "," << trans[2] << "," << q[0] << "," << q[1] << "," << q[2] << "," << q[3] << std::endl;
 }
 
+void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
+{
+    mpSLAM->Reset();
+}
 
