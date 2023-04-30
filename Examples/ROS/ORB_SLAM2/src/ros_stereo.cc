@@ -25,6 +25,9 @@
 #include<chrono>
 
 #include<ros/ros.h>
+#include<std_msgs/Float64MultiArray.h>
+#include<std_msgs/MultiArrayDimension.h>
+#include<std_msgs/String.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -42,6 +45,17 @@ using namespace std;
 ofstream g_ofs;
 int g_seq;
 ros::Publisher g_pubPose;
+ros::Publisher g_pubInfo;
+
+ros::Subscriber g_resetSub;
+
+struct PoseInfo
+{
+    double numberOfMatches = 0.0;
+    bool isLost = true;
+};
+
+PoseInfo g_poseInfo;
 
 class ImageGrabber
 {
@@ -49,6 +63,8 @@ public:
     ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
     void GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const sensor_msgs::ImageConstPtr& msgRight);
+
+    void onResetCommand(const std_msgs::String::ConstPtr& data);
 
     ORB_SLAM2::System* mpSLAM;
     bool do_rectify;
@@ -121,6 +137,9 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
+    g_pubInfo = nh.advertise<std_msgs::Float64MultiArray>("/cube/data/vslam_localization/info", 1);
+    g_resetSub = nh.subscribe(
+        "/cube/localization/vslam/command", 1, &ImageGrabber::onResetCommand, &igb);
 
     message_filters::Subscriber<sensor_msgs::Image> left_sub(nh, "/camera/left/image_raw", 1);
     message_filters::Subscriber<sensor_msgs::Image> right_sub(nh, "/camera/right/image_raw", 1);
@@ -174,11 +193,21 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
         cv::Mat imLeft, imRight;
         cv::remap(cv_ptrLeft->image,imLeft,M1l,M2l,cv::INTER_LINEAR);
         cv::remap(cv_ptrRight->image,imRight,M1r,M2r,cv::INTER_LINEAR);
-        trackingResult = mpSLAM->TrackStereo(imLeft,imRight,cv_ptrLeft->header.stamp.toSec());
+        trackingResult = mpSLAM->TrackStereo(
+            imLeft,
+            imRight,
+            cv_ptrLeft->header.stamp.toSec(),
+            g_poseInfo.numberOfMatches,
+            g_poseInfo.isLost);
     }
     else
     {
-        trackingResult = mpSLAM->TrackStereo(cv_ptrLeft->image,cv_ptrRight->image,cv_ptrLeft->header.stamp.toSec());
+        trackingResult = mpSLAM->TrackStereo(
+            cv_ptrLeft->image,
+            cv_ptrRight->image,
+            cv_ptrLeft->header.stamp.toSec(),
+            g_poseInfo.numberOfMatches,
+            g_poseInfo.isLost);
 
         auto vKeys = mpSLAM->GetTrackedKeyPointsUn();
         auto vMPs = mpSLAM->GetTrackedMapPoints();
@@ -262,7 +291,27 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
     g_pubPose.publish(poseCovStamped);
     g_seq++;
 
+    std_msgs::Float64MultiArray infoMsg;
+    std::vector<double> data;
+    data.push_back(poseCovStamped.header.stamp.toSec());
+    data.push_back(g_poseInfo.numberOfMatches);
+    g_poseInfo.isLost ? data.push_back(1.0) :
+        data.push_back(0.0);
+    infoMsg.data.resize(data.size());
+
+    int count = 0;
+    for_each(data.begin(), data.end(),
+    [&infoMsg, &count](const double& data){
+        infoMsg.data[count] = data;
+        count ++;
+    });
+
+    g_pubInfo.publish(infoMsg);
 //    g_ofs << trans[0] << "," << trans[1] << "," << trans[2] << "," << q[0] << "," << q[1] << "," << q[2] << "," << q[3] << std::endl;
 }
 
+void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
+{
+    mpSLAM->Reset();
+}
 
