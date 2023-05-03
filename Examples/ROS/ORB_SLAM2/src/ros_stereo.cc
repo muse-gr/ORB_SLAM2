@@ -30,6 +30,7 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <std_msgs/String.h>
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -59,6 +60,7 @@ public:
     ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
     void GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const sensor_msgs::ImageConstPtr& msgRight);
+    void onControlCommand(const std_msgs::String &msg);
 
     ORB_SLAM2::System* mpSLAM;
     bool do_rectify;
@@ -139,6 +141,8 @@ int main(int argc, char **argv)
     message_filters::Synchronizer<sync_pol> sync(sync_pol(10), left_sub,right_sub);
     sync.registerCallback(boost::bind(&ImageGrabber::GrabStereo,&igb,_1,_2));
 
+    ros::Subscriber command_sub = nh.subscribe("/cube/localization/vslam/command", 10, &ImageGrabber::onControlCommand, &igb);
+
     ros::spin();
 
     // Stop all threads
@@ -200,32 +204,8 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
             cv_ptrLeft->header.stamp.toSec(),
             g_poseInfo.numberOfMatches,
             g_poseInfo.isLost);
-
-        auto vKeys = mpSLAM->GetTrackedKeyPointsUn();
-        auto vMPs = mpSLAM->GetTrackedMapPoints();
-        const int N = vKeys.size();
-        auto leftImageToSave = cv_ptrLeft->image.clone();
-        auto rightImageToSave = cv_ptrRight->image.clone();
-
-        for(int i=0; i<N; i++)
-        {
-            if(vMPs[i])
-            {
-                cv::circle(leftImageToSave,vKeys[i].pt,1,cv::Scalar(0,255,0),-1);
-                cv::circle(rightImageToSave,vKeys[i].pt,1,cv::Scalar(0,255,0),-1);
-            }
-        }
-
-        static int num = 0;
-
-        std::stringstream ss;
-        ss << std::setfill('0') << std::setw(6) << num;
-        cv::imwrite("./data/left" + ss.str() + ".jpg", leftImageToSave);
-        cv::imwrite("./data/right" + ss.str() + ".jpg", rightImageToSave);
-
-        num++;
     }
-
+    
     if (trackingResult.empty())
     {
         ROS_INFO("Tracking lost");
@@ -262,7 +242,7 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
     tf::Vector3 rosTransBase = transform * transCamToBase;
 
     geometry_msgs::PoseWithCovarianceStamped poseCovStamped;
-    poseCovStamped.header.frame_id = "map";
+    poseCovStamped.header.frame_id = "slam_base";
     poseCovStamped.header.seq = g_seq;
     poseCovStamped.header.stamp = ros::Time::now();
     poseCovStamped.pose.pose.position.x = rosTransBase.x();
@@ -302,4 +282,16 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
 //    g_ofs << trans[0] << "," << trans[1] << "," << trans[2] << "," << q[0] << "," << q[1] << "," << q[2] << "," << q[3] << std::endl;
 }
 
+void ImageGrabber::onControlCommand(const std_msgs::String &msg)
+{
+    ROS_INFO("Received control command: %s", msg.data.c_str());
+    if (msg.data == "reset")
+    {
+        mpSLAM->Reset();
+    }
+    else
+    {
+        ROS_ERROR("Unknown command: %s", msg.data.c_str());
+    }
+}
 
