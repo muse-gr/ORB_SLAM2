@@ -288,14 +288,14 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
 
 void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
 {
-    ROS_INFO("Received control command: %s", msg.data.c_str());
-    if (msg.data == "reset")
+    ROS_INFO("Received control command: %s", data->data.c_str());
+    if (data->data == "reset")
     {
         mpSLAM->Reset();
     }
     else
     {
-        ROS_WARN("Unknown command: %s", msg.data.c_str());
+        ROS_WARN("Unknown command: %s", data->data.c_str());
     }
 }
 
