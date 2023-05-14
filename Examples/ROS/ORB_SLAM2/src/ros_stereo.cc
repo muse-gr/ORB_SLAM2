@@ -36,6 +36,8 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
+#include <sensor_msgs/Image.h>
+
 #include<opencv2/core/core.hpp>
 
 #include"../../../include/System.h"
@@ -46,6 +48,7 @@ ofstream g_ofs;
 int g_seq;
 ros::Publisher g_pubPose;
 ros::Publisher g_pubInfo;
+ros::Publisher g_pubDebugImage;
 
 ros::Subscriber g_resetSub;
 
@@ -88,7 +91,7 @@ int main(int argc, char **argv)
     }
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,false);
+    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::STEREO,true);
 
     ImageGrabber igb(&SLAM);
 
@@ -138,6 +141,7 @@ int main(int argc, char **argv)
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
     g_pubInfo = nh.advertise<std_msgs::Float64MultiArray>("/cube/data/vslam_localization/info", 1);
+    g_pubDebugImage = nh.advertise<sensor_msgs::Image>("cube/data/vslam_localization/debug_image", 1);
     g_resetSub = nh.subscribe(
         "/cube/localization/vslam/command", 1, &ImageGrabber::onResetCommand, &igb);
 
@@ -270,7 +274,7 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
     tf::Vector3 rosTransBase = transform * transCamToBase;
 
     geometry_msgs::PoseWithCovarianceStamped poseCovStamped;
-    poseCovStamped.header.frame_id = "map";
+    poseCovStamped.header.frame_id = "slam_base";
     poseCovStamped.header.seq = g_seq;
     poseCovStamped.header.stamp = ros::Time::now();
     poseCovStamped.pose.pose.position.x = rosTransBase.x();
@@ -307,7 +311,26 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
     });
 
     g_pubInfo.publish(infoMsg);
-//    g_ofs << trans[0] << "," << trans[1] << "," << trans[2] << "," << q[0] << "," << q[1] << "," << q[2] << "," << q[3] << std::endl;
+
+    cv::Mat debugImage = mpSLAM->mpFrameDrawer->DrawFrame();
+    sensor_msgs::Image debugImageMsg;
+    cv_bridge::CvImage img_bridge;
+
+    std_msgs::Header header;
+    header.stamp = ros::Time::now();
+
+    try
+    {
+        img_bridge = cv_bridge::CvImage(header, sensor_msgs::image_encodings::RGB8, debugImage);
+    }
+    catch (cv_bridge::Exception& e)
+    {
+        ROS_ERROR("cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    img_bridge.toImageMsg(debugImageMsg);
+    g_pubDebugImage.publish(debugImageMsg);
 }
 
 void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
