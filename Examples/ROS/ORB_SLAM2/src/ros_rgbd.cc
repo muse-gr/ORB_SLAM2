@@ -30,11 +30,18 @@
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
+
+#include <tf/tf.h>
+#include <tf/transform_broadcaster.h>
+
 #include<opencv2/core/core.hpp>
 
 #include"../../../include/System.h"
 
 using namespace std;
+
+ros::Publisher g_pubPose;
 
 class ImageGrabber
 {
@@ -65,8 +72,10 @@ int main(int argc, char **argv)
 
     ros::NodeHandle nh;
 
-    message_filters::Subscriber<sensor_msgs::Image> rgb_sub(nh, "/camera/rgb/image_raw", 1);
-    message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, "camera/depth_registered/image_raw", 1);
+    g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
+
+    message_filters::Subscriber<sensor_msgs::Image> rgb_sub(nh, "/camera/color/image_raw", 1);
+    message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, "/camera/aligned_depth_to_color/image_raw", 1);
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> sync_pol;
     message_filters::Synchronizer<sync_pol> sync(sync_pol(10), rgb_sub,depth_sub);
     sync.registerCallback(boost::bind(&ImageGrabber::GrabRGBD,&igb,_1,_2));
@@ -109,7 +118,64 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
         return;
     }
 
-    mpSLAM->TrackRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
+    cv::Mat trackingResult = mpSLAM->TrackRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
+
+    if (trackingResult.empty())
+    {
+        ROS_INFO("Tracking lost");
+        return;
+    }
+
+
+    cv::Mat cvRotCamToInit = trackingResult.rowRange(0,3).colRange(0,3).t();
+    cv::Mat cvTransCamToInit = -cvRotCamToInit * trackingResult.rowRange(0,3).col(3);
+
+    tf::Matrix3x3 orbToRosCoord(
+            0, 0, 1,
+            1, 0, 0,
+            0, 1, 0);
+    tf::Matrix3x3 rot(
+            cvRotCamToInit.at<float>(0,0), cvRotCamToInit.at<float>(0,1), cvRotCamToInit.at<float>(0,2),
+            cvRotCamToInit.at<float>(1,0), cvRotCamToInit.at<float>(1,1), cvRotCamToInit.at<float>(1,2),
+            cvRotCamToInit.at<float>(2,0), cvRotCamToInit.at<float>(2,1), cvRotCamToInit.at<float>(2,2));
+    tf::Quaternion q;
+    (orbToRosCoord * rot).getRotation(q);
+
+    tf::Quaternion qBase;
+    qBase.setRPY(0, -M_PI_2, 0);
+    tf::Quaternion rosQ = q * qBase;
+
+    tf::Vector3 trans = tf::Vector3(cvTransCamToInit.at<float>(0,0), cvTransCamToInit.at<float>(1,0), cvTransCamToInit.at<float>(2,0));
+    tf::Vector3 rosTransCam = orbToRosCoord * trans;
+
+    tf::Transform transform;
+    transform.setRotation(rosQ);
+    transform.setOrigin(rosTransCam);
+
+    // Convert camera pose to vehicle pose, assuming camera and vehicle face the same direction.
+    tf::Vector3 transCamToBase = tf::Vector3(-0.08, 0, 0);
+    tf::Vector3 rosTransBase = transform * transCamToBase;
+
+    geometry_msgs::PoseWithCovarianceStamped poseCovStamped;
+    poseCovStamped.header.frame_id = "slam_base";
+//    poseCovStamped.header.seq = g_seq;
+    poseCovStamped.header.stamp = ros::Time::now();
+    poseCovStamped.pose.pose.position.x = rosTransBase.x();
+    poseCovStamped.pose.pose.position.y = rosTransBase.y();
+    poseCovStamped.pose.pose.position.z = rosTransBase.z();
+    tf::quaternionTFToMsg(rosQ, poseCovStamped.pose.pose.orientation);
+    // clang-format off
+    poseCovStamped.pose.covariance = {
+        1e-4, 0,    0,    0,    0,    0,
+        0,    1e-4, 0,    0,    0,    0,
+        0,    0,    1e-4, 0,    0,    0,
+        0,    0,    0,    1e-6, 0,    0,
+        0,    0,    0,    0,    1e-6, 0,
+        0,    0,    0,    0,    0,    1e-6
+    };
+    // clang-format on
+
+    g_pubPose.publish(poseCovStamped);
 }
 
 
