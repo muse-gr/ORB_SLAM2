@@ -128,6 +128,7 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
+    FrameDrawer* mpFrameDrawer;
 private:
 
     // Input sensor
@@ -157,7 +158,6 @@ private:
     // The viewer draws the map and the current camera pose. It uses Pangolin.
     Viewer* mpViewer;
 
-    FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
 
     // System threads: Local Mapping, Loop Closing, Viewer.
