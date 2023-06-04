@@ -31,6 +31,7 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <std_msgs/String.h>
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -66,7 +67,6 @@ public:
     ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
     void GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const sensor_msgs::ImageConstPtr& msgRight);
-
     void onResetCommand(const std_msgs::String::ConstPtr& data);
 
     ORB_SLAM2::System* mpSLAM;
@@ -212,32 +212,8 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
             cv_ptrLeft->header.stamp.toSec(),
             g_poseInfo.numberOfMatches,
             g_poseInfo.isLost);
-
-        auto vKeys = mpSLAM->GetTrackedKeyPointsUn();
-        auto vMPs = mpSLAM->GetTrackedMapPoints();
-        const int N = vKeys.size();
-        auto leftImageToSave = cv_ptrLeft->image.clone();
-        auto rightImageToSave = cv_ptrRight->image.clone();
-
-        for(int i=0; i<N; i++)
-        {
-            if(vMPs[i])
-            {
-                cv::circle(leftImageToSave,vKeys[i].pt,1,cv::Scalar(0,255,0),-1);
-                cv::circle(rightImageToSave,vKeys[i].pt,1,cv::Scalar(0,255,0),-1);
-            }
-        }
-
-        static int num = 0;
-
-        std::stringstream ss;
-        ss << std::setfill('0') << std::setw(6) << num;
-        cv::imwrite("./data/left" + ss.str() + ".jpg", leftImageToSave);
-        cv::imwrite("./data/right" + ss.str() + ".jpg", rightImageToSave);
-
-        num++;
     }
-
+    
     if (trackingResult.empty())
     {
         ROS_INFO("Tracking lost");
@@ -335,6 +311,14 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr& msgLeft,const se
 
 void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
 {
-    mpSLAM->Reset();
+    ROS_INFO("Received control command: %s", data->data.c_str());
+    if (data->data == "reset")
+    {
+        mpSLAM->Reset();
+    }
+    else
+    {
+        ROS_WARN("Unknown command: %s", data->data.c_str());
+    }
 }
 
