@@ -31,6 +31,7 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <std_msgs/String.h>
 
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
@@ -50,6 +51,7 @@ public:
     ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
     void GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const sensor_msgs::ImageConstPtr& msgD);
+    void onResetCommand(const std_msgs::String::ConstPtr& data);
 
     ORB_SLAM2::System* mpSLAM;
 };
@@ -67,7 +69,7 @@ int main(int argc, char **argv)
     }    
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::RGBD,true);
+    ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::RGBD,false);
 
     ImageGrabber igb(&SLAM);
 
@@ -162,7 +164,7 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
     geometry_msgs::PoseWithCovarianceStamped poseCovStamped;
     poseCovStamped.header.frame_id = "slam_base";
 //    poseCovStamped.header.seq = g_seq;
-    poseCovStamped.header.stamp = ros::Time::now();
+    poseCovStamped.header.stamp = msgD->header.stamp;
     poseCovStamped.pose.pose.position.x = rosTransBase.x();
     poseCovStamped.pose.pose.position.y = rosTransBase.y();
     poseCovStamped.pose.pose.position.z = rosTransBase.z();
