@@ -42,6 +42,7 @@
 using namespace std;
 
 ros::Publisher g_pubPose;
+ros::Subscriber g_resetSub;
 
 class ImageGrabber
 {
@@ -73,6 +74,8 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
+    g_resetSub = nh.subscribe(
+        "/cube/localization/vslam/command", 1, &ImageGrabber::onResetCommand, &igb);
 
     message_filters::Subscriber<sensor_msgs::Image> rgb_sub(nh, "/camera/color/image_raw", 1);
     message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, "/camera/aligned_depth_to_color/image_raw", 1);
@@ -178,4 +181,16 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
     g_pubPose.publish(poseCovStamped);
 }
 
+void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)
+{
+    ROS_INFO("Received control command: %s", data->data.c_str());
+    if (data->data == "reset")
+    {
+        mpSLAM->Reset();
+    }
+    else
+    {
+        ROS_WARN("Unknown command: %s", data->data.c_str());
+    }
+}
 
