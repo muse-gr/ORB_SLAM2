@@ -25,6 +25,7 @@
 #include<chrono>
 
 #include<ros/ros.h>
+#include<std_msgs/Float64MultiArray.h>
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
@@ -42,8 +43,18 @@
 
 using namespace std;
 
+int g_seq;
 ros::Publisher g_pubPose;
+ros::Publisher g_pubInfo;
 ros::Subscriber g_resetSub;
+
+struct PoseInfo
+{
+    double numberOfMatches = 0.0;
+    bool isLost = true;
+};
+
+PoseInfo g_poseInfo;
 
 class ImageGrabber
 {
@@ -58,6 +69,7 @@ public:
 
 int main(int argc, char **argv)
 {
+    g_seq = 0;
     ros::init(argc, argv, "RGBD");
     ros::start();
 
@@ -76,6 +88,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     g_pubPose = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>("/cube/data/vslam_localization/pose", 1);
+    g_pubInfo = nh.advertise<std_msgs::Float64MultiArray>("/cube/data/vslam_localization/info", 1);
     g_resetSub = nh.subscribe(
         "/cube/localization/vslam/command", 1, &ImageGrabber::onResetCommand, &igb);
 
@@ -123,7 +136,12 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
         return;
     }
 
-    cv::Mat trackingResult = mpSLAM->TrackRGBD(cv_ptrRGB->image,cv_ptrD->image,cv_ptrRGB->header.stamp.toSec());
+    cv::Mat trackingResult = mpSLAM->TrackRGBD(
+        cv_ptrRGB->image,
+        cv_ptrD->image,
+        cv_ptrRGB->header.stamp.toSec(),
+        g_poseInfo.numberOfMatches,
+        g_poseInfo.isLost);
 
     if (trackingResult.empty())
     {
@@ -163,7 +181,7 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
 
     geometry_msgs::PoseWithCovarianceStamped poseCovStamped;
     poseCovStamped.header.frame_id = "slam_base";
-//    poseCovStamped.header.seq = g_seq;
+    poseCovStamped.header.seq = g_seq;
     poseCovStamped.header.stamp = msgD->header.stamp;
     poseCovStamped.pose.pose.position.x = rosTransBase.x();
     poseCovStamped.pose.pose.position.y = rosTransBase.y();
@@ -181,6 +199,24 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr& msgRGB,const senso
     // clang-format on
 
     g_pubPose.publish(poseCovStamped);
+    g_seq++;
+
+    std_msgs::Float64MultiArray infoMsg;
+    std::vector<double> data;
+    data.push_back(poseCovStamped.header.stamp.toSec());
+    data.push_back(g_poseInfo.numberOfMatches);
+    g_poseInfo.isLost ? data.push_back(1.0) :
+        data.push_back(0.0);
+    infoMsg.data.resize(data.size());
+
+    int count = 0;
+    for_each(data.begin(), data.end(),
+    [&infoMsg, &count](const double& data){
+        infoMsg.data[count] = data;
+        count ++;
+    });
+
+    g_pubInfo.publish(infoMsg);
 }
 
 void ImageGrabber::onResetCommand(const std_msgs::String::ConstPtr& data)

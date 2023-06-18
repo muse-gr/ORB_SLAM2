@@ -212,7 +212,12 @@ cv::Mat Tracking::GrabImageStereo(
 }
 
 
-cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp)
+cv::Mat Tracking::GrabImageRGBD(
+    const cv::Mat &imRGB,
+    const cv::Mat &imD,
+    const double &timestamp,
+    double& numberOfMatches,
+    bool& isLost)
 {
     mImGray = imRGB;
     cv::Mat imDepth = imD;
@@ -238,6 +243,9 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const d
     mCurrentFrame = Frame(mImGray,imDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
+
+    numberOfMatches = getNumberOfMatchesInFrame();
+    isLost = isFrameLost();
 
     return mCurrentFrame.mTcw.clone();
 }
