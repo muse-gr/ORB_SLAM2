@@ -64,7 +64,14 @@ public:
         const double &timestamp,
         double& numberOfMatches,
         bool& isLost);
-    cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
+
+    cv::Mat GrabImageRGBD(
+        const cv::Mat &imRGB,
+        const cv::Mat &imD,
+        const double &timestamp,
+        double& numberOfMatches,
+        bool& isLost);
+
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);

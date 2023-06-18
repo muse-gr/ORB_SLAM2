@@ -95,7 +95,9 @@ int main(int argc, char **argv)
 #endif
 
         // Pass the image to the SLAM system
-        SLAM.TrackRGBD(imRGB,imD,tframe);
+        double numberOfMatches;
+        bool isLost;
+        SLAM.TrackRGBD(imRGB,imD,tframe,numberOfMatches,isLost);
 
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
